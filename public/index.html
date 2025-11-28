@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Store - TUS Protocol</title>
+    <!-- TUS JS Client - локальная версия -->
+    <script src="/tus.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 2.5em;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 40px;
+            border: 2px dashed #667eea;
+        }
+
+        .upload-area {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            background: #f0f0f0;
+        }
+
+        .upload-area.dragover {
+            background: #e8f0fe;
+            border: 2px solid #667eea;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .upload-button:hover {
+            background: #5568d3;
+        }
+
+        .upload-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .file-list {
+            margin-top: 40px;
+        }
+
+        .file-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s ease;
+        }
+
+        .file-item:hover {
+            transform: translateX(5px);
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-download {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-download:hover {
+            background: #218838;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background: #c82333;
+        }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .selected-files {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📁 File Store</h1>
+        
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <p style="font-size: 18px; margin-bottom: 10px;">Перетащите файлы сюда или нажмите для выбора</p>
+                <p style="color: #666; font-size: 14px;">Поддержка возобновляемой загрузки через TUS Protocol</p>
+                <input type="file" id="fileInput" multiple>
+            </div>
+            <div style="text-align: center;">
+                <button class="upload-button" id="uploadButton" disabled>Загрузить файлы</button>
+            </div>
+            <div class="selected-files" id="selectedFiles"></div>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+        </div>
+
+        <div class="file-list">
+            <h2 style="margin-bottom: 20px;">Загруженные файлы</h2>
+            <div id="filesList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Ждем загрузки библиотеки TUS
+        function waitForTus() {
+            return new Promise((resolve) => {
+                const checkTus = () => {
+                    return typeof tus !== 'undefined' || 
+                           typeof window.tus !== 'undefined';
+                };
+
+                if (checkTus()) {
+                    console.log('TUS библиотека уже загружена');
+                    resolve();
+                    return;
+                }
+
+                const checkInterval = setInterval(() => {
+                    if (checkTus()) {
+                        clearInterval(checkInterval);
+                        console.log('TUS библиотека успешно загружена');
+                        resolve();
+                    }
+                }, 50);
+                
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    if (!checkTus()) {
+                        console.error('TUS библиотека не загружена');
+                        alert('Ошибка: TUS библиотека не загружена. Убедитесь, что сервер запущен.');
+                    }
+                    resolve();
+                }, 2000);
+            });
+        }
+
+        // Инициализация после загрузки страницы и библиотеки
+        waitForTus().then(() => {
+            initApp();
+        });
+
+        function initApp() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadArea = document.getElementById('uploadArea');
+            const uploadButton = document.getElementById('uploadButton');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const statusMessage = document.getElementById('statusMessage');
+            const filesList = document.getElementById('filesList');
+            const selectedFilesDiv = document.getElementById('selectedFiles');
+
+            let selectedFiles = [];
+
+            // Обработка клика по области загрузки
+            uploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // Обработка выбора файлов
+            fileInput.addEventListener('change', (e) => {
+                selectedFiles = Array.from(e.target.files);
+                updateUploadButton();
+                updateSelectedFiles();
+            });
+
+            // Drag and Drop
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                selectedFiles = Array.from(e.dataTransfer.files);
+                updateUploadButton();
+                updateSelectedFiles();
+            });
+
+            function updateUploadButton() {
+                uploadButton.disabled = selectedFiles.length === 0;
+            }
+
+            function updateSelectedFiles() {
+                if (selectedFiles.length > 0) {
+                    selectedFilesDiv.innerHTML = `<strong>Выбрано файлов: ${selectedFiles.length}</strong><br>` +
+                        selectedFiles.map(f => `• ${f.name} (${formatFileSize(f.size)})`).join('<br>');
+                } else {
+                    selectedFilesDiv.innerHTML = '';
+                }
+            }
+
+            // Загрузка файлов через TUS
+            uploadButton.addEventListener('click', async () => {
+                if (selectedFiles.length === 0) return;
+
+                progressContainer.style.display = 'block';
+                statusMessage.style.display = 'none';
+                uploadButton.disabled = true;
+                progressFill.style.width = '0%';
+                progressFill.textContent = '0%';
+
+                const uploadPromises = selectedFiles.map((file, index) => 
+                    uploadFile(file, index, selectedFiles.length)
+                );
+                
+                try {
+                    await Promise.all(uploadPromises);
+                    showStatus('Все файлы успешно загружены!', 'success');
+                    selectedFiles = [];
+                    fileInput.value = '';
+                    updateUploadButton();
+                    updateSelectedFiles();
+                    loadFiles();
+                } catch (error) {
+                    showStatus('Ошибка при загрузке: ' + error.message, 'error');
+                } finally {
+                    uploadButton.disabled = false;
+                }
+            });
+
+            function uploadFile(file, index, total) {
+                return new Promise((resolve, reject) => {
+                    if (typeof tus === 'undefined') {
+                        reject(new Error('TUS библиотека не загружена'));
+                        return;
+                    }
+                    
+                    const upload = new tus.Upload(file, {
+                        endpoint: '/files',
+                        retryDelays: [0, 3000, 5000, 10000, 20000],
+                        metadata: {
+                            filename: file.name,
+                            filetype: file.type
+                        },
+                        onError: (error) => {
+                            console.error('Upload error:', error);
+                            reject(error);
+                        },
+                        onProgress: (bytesUploaded, bytesTotal) => {
+                            const fileProgress = (bytesUploaded / bytesTotal) * 100;
+                            const totalProgress = ((index + fileProgress / 100) / total) * 100;
+                            progressFill.style.width = totalProgress + '%';
+                            progressFill.textContent = totalProgress.toFixed(1) + '%';
+                        },
+                        onSuccess: () => {
+                            console.log('Upload successful:', file.name);
+                            resolve();
+                        }
+                    });
+
+                    upload.start();
+                });
+            }
+
+            function showStatus(message, type) {
+                statusMessage.textContent = message;
+                statusMessage.className = `status-message status-${type}`;
+                statusMessage.style.display = 'block';
+            }
+
+            // Загрузка списка файлов
+            async function loadFiles() {
+                try {
+                    const response = await fetch('/api/files');
+                    const files = await response.json();
+                    displayFiles(files);
+                } catch (error) {
+                    console.error('Error loading files:', error);
+                    filesList.innerHTML = '<div class="empty-state">Ошибка загрузки списка файлов</div>';
+                }
+            }
+
+            function displayFiles(files) {
+                if (files.length === 0) {
+                    filesList.innerHTML = '<div class="empty-state">Нет загруженных файлов</div>';
+                    return;
+                }
+
+                filesList.innerHTML = files.map(file => `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">${escapeHtml(file.name)}</div>
+                            <div class="file-size">${formatFileSize(file.size)} • ${new Date(file.uploadedAt).toLocaleString('ru-RU')}</div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="btn btn-download" onclick="downloadFile('${encodeURIComponent(file.name)}')">
+                                Скачать
+                            </button>
+                            <button class="btn btn-delete" onclick="deleteFile('${encodeURIComponent(file.name)}')">
+                                Удалить
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Делаем функции глобальными для использования в onclick
+            window.downloadFile = async function(filename) {
+                try {
+                    const response = await fetch(`/api/files/${filename}`);
+                    if (!response.ok) throw new Error('File not found');
+                    
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = decodeURIComponent(filename);
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } catch (error) {
+                    alert('Ошибка при скачивании файла: ' + error.message);
+                }
+            };
+
+            window.deleteFile = async function(filename) {
+                if (!confirm('Вы уверены, что хотите удалить этот файл?')) return;
+
+                try {
+                    const response = await fetch(`/api/files/${filename}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!response.ok) throw new Error('Failed to delete file');
+
+                    loadFiles();
+                } catch (error) {
+                    alert('Ошибка при удалении файла: ' + error.message);
+                }
+            };
+
+            // Загружаем список файлов при загрузке страницы
+            loadFiles();
+        }
+    </script>
+</body>
+</html>
+
